@@ -6,6 +6,8 @@ from unsafe import gc_alloc, ptr
 def zero(T: type) -> dynamic:
     if T == i32:
         return 0
+    if T == f64:
+        return 0.0
     if T == ptr[V3]:
         return ptr[V3].NULL
 
@@ -39,8 +41,10 @@ def ndarray1(DTYPE):
         def __new__(cls: type, length: i32) -> ndarray:
             data = gc_alloc(ArrayData(DTYPE))(1)
             data.length = length
-            data.capacity = length
-            data.items = gc_alloc(DTYPE)(length)
+            data.capacity = 16
+            if length > data.capacity:
+                data.capacity = length
+            data.items = gc_alloc(DTYPE)(data.capacity)
             i = 0
             while i < length:
                 data.items[i] = zero(DTYPE)
@@ -495,6 +499,154 @@ def init() -> void:
     P[255] = 180
 
 
+###
+### Marching squares
+###
+
+var _height_map = ptr[ArrayData(f64)].NULL
+def get_height_map() -> ndarray1(f64):
+    return ndarray1(f64).__lift__(_height_map)
+
+def make_height_map(width: i32, height: i32) -> void:
+    # width and height already scaled
+    height_map = ndarray1(f64)(width * height)
+    _height_map = height_map.__ll__    
+
+def update_height_map(width: i32, height: i32, scale: f64, z: f64) -> void:
+    # width and height already scaled
+    # scale = grid_scale / noise_factor
+    height_map = get_height_map()
+
+    i: i32 = 0
+    y: f64 = 0
+    x: f64 = 0
+    while y < height:
+        while x < width:
+            n = perlin3(scale * x, scale * y, scale * z)
+            n = n + 0.50 * perlin3(2 * scale * x, 2 * scale * y, 2 * scale * z)
+            n = n + 0.25 * perlin3(4 * scale * x, 4 * scale * y, 4 * scale * z)
+            height_map[i] = n
+            i = i + 1
+            x = x + 1
+        y = y + 1
+
+def crossfade_height_map(width: i32, height: i32, crossfade_range: i32) -> void:
+    # width and height already scaled
+    height_map = get_height_map()
+    y: i32 = 0
+    x: i32 = 0
+    weight: f64 = 0
+
+    while y < height:
+        while x < crossfade_range:
+            weight = x
+            weigth = weight / crossfade_range
+            pos_i = y * width + x
+            neg_i = y * width + width - crossfade_range + x
+            old_pos = height_map[pos_i]
+            old_neg = height_map[neg_i]
+            height_map[neg_i] = weight * old_pos + (1.0 - weight) * old_neg
+            height_map[pos_i] = height_map[neg_i]
+            x = x + 1
+        y = y + 1
+
+def interpolate(sq_threshold: f64, v1: f64, v2: f64) -> f64:
+    if v1 == v2:
+        return v1
+    return (sq_threshold - v1) / (v2 - v1)
+
+def append_p(lines: ndarray1(f64), xs: ndarray1(f64), ys: ndarray1(f64), a: i32, b: i32) -> void:
+    x1: f64 = xs[a]
+    y1: f64 = ys[a]
+    x2: f64 = xs[b]
+    y2: f64 = ys[b]
+
+    lines.append(x1)
+    lines.append(y1)
+    lines.append(0)
+    lines.append(x2)
+    lines.append(y2)
+    lines.append(0)    
+
+def marching_squares(width: i32, height: i32, sq_threshold: f64) -> ndarray1(f64):
+    # width and height already scaled
+    height_map = get_height_map()
+    lines = ndarray1(f64)(0)
+    edge_points_x = ndarray1(f64)(4)
+    edge_points_y = ndarray1(f64)(4)
+    x = 0
+    y = 0
+
+    while y < height:
+        while x < width:  # overlaps crossfade, that's on purpose
+            tl = height_map[y*width+ x]
+            tr = height_map[y*width + x+1]
+            bl = height_map[(y+1)*width + x]
+            br = height_map[(y+1)*width + x+1]
+    
+            sq_idx = 0
+            if tl > sq_threshold:
+                sq_idx = sq_idx | 8
+            if tr > sq_threshold:
+                sq_idx = sq_idx | 4
+            if br > sq_threshold:
+                sq_idx = sq_idx | 2
+            if bl > sq_threshold:
+                sq_idx = sq_idx | 1
+    
+            edge_points_x[0] = x + interpolate(sq_threshold, tl, tr)
+            edge_points_y[0] = y
+            edge_points_x[1] = x + 1
+            edge_points_y[1] = y + interpolate(sq_threshold, tr, br)
+            edge_points_x[2] = x + interpolate(sq_threshold, bl, br)
+            edge_points_y[2] = y + 1
+            edge_points_x[3] = x
+            edge_points_y[3] = y + interpolate(sq_threshold, tl, bl)
+    
+            if sq_idx == 0:
+                pass
+            elif sq_idx == 1:
+                append_p(lines, edge_points_x, edge_points_y, 3, 2)
+            elif sq_idx == 2:
+                append_p(lines, edge_points_x, edge_points_y, 2, 1)
+            elif sq_idx == 3:
+                append_p(lines, edge_points_x, edge_points_y, 3, 1)
+            elif sq_idx == 4:
+                append_p(lines, edge_points_x, edge_points_y, 0, 1)
+            elif sq_idx == 5:  # ambiguous
+                append_p(lines, edge_points_x, edge_points_y, 0, 3)
+                append_p(lines, edge_points_x, edge_points_y, 1, 2)
+            elif sq_idx == 6:
+                append_p(lines, edge_points_x, edge_points_y, 0, 2)
+            elif sq_idx == 7:
+                append_p(lines, edge_points_x, edge_points_y, 0, 3)
+            elif sq_idx == 8:
+                append_p(lines, edge_points_x, edge_points_y, 0, 3)
+            elif sq_idx == 9:
+                append_p(lines, edge_points_x, edge_points_y, 0, 2)
+            elif sq_idx == 10:  # ambiguous
+                append_p(lines, edge_points_x, edge_points_y, 0, 1)
+                append_p(lines, edge_points_x, edge_points_y, 2, 3)
+            elif sq_idx == 11:
+                append_p(lines, edge_points_x, edge_points_y, 0, 1)
+            elif sq_idx == 12:
+                append_p(lines, edge_points_x, edge_points_y, 3, 1)
+            elif sq_idx == 13:
+                append_p(lines, edge_points_x, edge_points_y, 2, 1)
+            elif sq_idx == 14:
+                append_p(lines, edge_points_x, edge_points_y, 3, 2)
+            elif sq_idx == 15:
+                pass
+
+            x = x + 1
+        y = y + 1
+    
+    return lines
+
+###
+### Main
+###
+
 def main() -> void:
     init()
     PERM = get_PERM()
@@ -506,7 +658,27 @@ def main() -> void:
     print(P[44])
     print(V3_I[6].z)
     seed(44)
-    i = 0
-    while i < 100:
-        perlin3(1.2 + i, 3.4, 5.6)
-        i = i + 1
+    print("mhm")
+    make_height_map(480, 216)
+    print("uhm")
+    update_height_map(480, 216, 10, 0)
+    print("cfhm")
+    crossfade_height_map(480, 216, 38)
+    print("ms 0")
+    marching_squares(480, 216, 0)
+    print("ms 0.3")
+    marching_squares(480, 216, 0.3)
+    print("ms -0.3")
+    marching_squares(480, 216, 0 -0.3)
+    print("ms 0.45")
+    marching_squares(480, 216, 0.45)
+    print("ms -0.45")
+    marching_squares(480, 216, 0 -0.45)
+    print("ms 0.6")
+    marching_squares(480, 216, 0.6)
+    print("ms -0.6")
+    marching_squares(480, 216, 0 -0.6)
+    print("ms -0.8")
+    marching_squares(480, 216, 0 -0.8)
+    print("ms 0.8")
+    marching_squares(480, 216, 0.8)
