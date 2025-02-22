@@ -60,6 +60,7 @@ ffibuilder.set_source(
     ],
     include_dirs=[f"{SPY_ROOT}/spy/libspy/include"],
     library_dirs=[f"{SPY_ROOT}/spy/libspy/build/{TARGET}/release"],
+    #extra_compile_args = ['-O0', '-g'],
 )
 
 
