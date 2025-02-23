@@ -1,3 +1,7 @@
 perlin/perlin
+perlin/perlin.abi3.so
 perlin/perlin.c
 perlin/perlin.wasm
+perlin/build
+perlin/dist
+perlin/.eggs
