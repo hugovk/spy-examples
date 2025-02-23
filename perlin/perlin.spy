@@ -519,8 +519,8 @@ def update_height_map(width: i32, height: i32, scale: f64, z: f64) -> void:
 
     i: i32 = 0
     y: f64 = 0
-    x: f64 = 0
     while y < height:
+        x: f64 = 0
         while x < width:
             n = perlin3(scale * x, scale * y, scale * z)
             n = n + 0.50 * perlin3(2 * scale * x, 2 * scale * y, 2 * scale * z)
@@ -533,14 +533,14 @@ def update_height_map(width: i32, height: i32, scale: f64, z: f64) -> void:
 def crossfade_height_map(width: i32, height: i32, crossfade_range: i32) -> void:
     # width and height already scaled
     height_map = get_height_map()
-    y: i32 = 0
-    x: i32 = 0
-    weight: f64 = 0
 
+    weight: f64 = 0.0
+    y: i32 = 0
     while y < height:
+        x: i32 = 0
         while x < crossfade_range:
             weight = x
-            weigth = weight / crossfade_range
+            weight = weight / crossfade_range
             pos_i = y * width + x
             neg_i = y * width + width - crossfade_range + x
             old_pos = height_map[pos_i]
@@ -574,16 +574,17 @@ def marching_squares(width: i32, height: i32, sq_threshold: f64) -> ndarray1(f64
     lines = ndarray1(f64)(0)
     edge_points_x = ndarray1(f64)(4)
     edge_points_y = ndarray1(f64)(4)
-    x = 0
-    y = 0
 
-    while y < height:
-        while x < width:  # overlaps crossfade, that's on purpose
-            tl = height_map[y*width+ x]
+    i = 0
+    y = 0
+    while y < height - 1:
+        x = 0
+        while x < width - 1:  # overlaps crossfade, that's on purpose
+            tl = height_map[y*width + x]
             tr = height_map[y*width + x+1]
             bl = height_map[(y+1)*width + x]
             br = height_map[(y+1)*width + x+1]
-    
+
             sq_idx = 0
             if tl > sq_threshold:
                 sq_idx = sq_idx | 8
@@ -593,7 +594,7 @@ def marching_squares(width: i32, height: i32, sq_threshold: f64) -> ndarray1(f64
                 sq_idx = sq_idx | 2
             if bl > sq_threshold:
                 sq_idx = sq_idx | 1
-    
+
             edge_points_x[0] = x + interpolate(sq_threshold, tl, tr)
             edge_points_y[0] = y
             edge_points_x[1] = x + 1
@@ -639,9 +640,13 @@ def marching_squares(width: i32, height: i32, sq_threshold: f64) -> ndarray1(f64
                 pass
 
             x = x + 1
+            i = i + 1
         y = y + 1
     
     return lines
+
+def mprint(arr: ndarray1(f64)) -> void:
+    print(arr.__ll__.length)
 
 ###
 ### Main
@@ -660,25 +665,35 @@ def main() -> void:
     seed(44)
     print("mhm")
     make_height_map(480, 216)
+
     print("uhm")
-    update_height_map(480, 216, 10, 0)
+    update_height_map(480, 216, 10.0 / 500.0, 0)
+
     print("cfhm")
     crossfade_height_map(480, 216, 38)
+
+    hm = get_height_map()
+    S = 0
+    i = S
+    while i < S + 38:
+        print(hm[i])
+        i = i + 1
+
     print("ms 0")
-    marching_squares(480, 216, 0)
+    mprint(marching_squares(480, 216, 0))
     print("ms 0.3")
-    marching_squares(480, 216, 0.3)
+    mprint(marching_squares(480, 216, 0.3))
     print("ms -0.3")
-    marching_squares(480, 216, 0 -0.3)
+    mprint(marching_squares(480, 216, 0 -0.3))
     print("ms 0.45")
-    marching_squares(480, 216, 0.45)
+    mprint(marching_squares(480, 216, 0.45))
     print("ms -0.45")
-    marching_squares(480, 216, 0 -0.45)
+    mprint(marching_squares(480, 216, 0 -0.45))
     print("ms 0.6")
-    marching_squares(480, 216, 0.6)
+    mprint(marching_squares(480, 216, 0.6))
     print("ms -0.6")
-    marching_squares(480, 216, 0 -0.6)
+    mprint(marching_squares(480, 216, 0 -0.6))
     print("ms -0.8")
-    marching_squares(480, 216, 0 -0.8)
+    mprint(marching_squares(480, 216, 0 -0.8))
     print("ms 0.8")
-    marching_squares(480, 216, 0.8)
+    mprint(marching_squares(480, 216, 0.8))

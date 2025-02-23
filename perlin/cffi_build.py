@@ -13,7 +13,9 @@ ffibuilder.cdef(
         double* items;
     };
 
+    void init();
     void seed(int32_t s);
+    struct ArrayData* get_height_map();
     void make_height_map(int32_t width, int32_t height);
     void update_height_map(int32_t width, int32_t height, double scale, double z);
     void crossfade_height_map(int32_t width, int32_t height, int32_t crossfade_range);
@@ -28,13 +30,17 @@ struct ArrayData {
     double* items;
 };
 
+void spy_perlin$init();
 void spy_perlin$seed(int32_t s);
+struct ArrayData* spy_perlin$get_height_map();
 void spy_perlin$make_height_map(int32_t width, int32_t height);
 void spy_perlin$update_height_map(int32_t width, int32_t height, double scale, double z);
 void spy_perlin$crossfade_height_map(int32_t width, int32_t height, int32_t crossfade_range);
 struct ArrayData* spy_perlin$marching_squares(int32_t width, int32_t height, double sq_threshold);
 
+#define init spy_perlin$init
 #define seed spy_perlin$seed
+#define get_height_map spy_perlin$get_height_map
 #define make_height_map spy_perlin$make_height_map
 #define update_height_map spy_perlin$update_height_map
 #define crossfade_height_map spy_perlin$crossfade_height_map
